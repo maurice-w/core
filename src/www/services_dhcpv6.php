@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (!empty($pconfig['gateway']) && !is_ipaddrv6($pconfig['gateway'])) {
             $input_errors[] = gettext("A valid IPv6 address must be specified for the gateway.");
         }
-        if ((!empty($pconfig['dns1']) && !is_ipaddrv6($pconfig['dns1'])) || (!empty($pconfig['dns2']) && !is_ipaddrv6($pconfig['dns2']))) {
+        if ((!empty($pconfig['dns1']) && $pconfig['dns1'] != "none" && !is_ipaddrv6($pconfig['dns1'])) || (!empty($pconfig['dns2']) && !is_ipaddrv6($pconfig['dns2']))) {
             $input_errors[] = gettext("A valid IPv6 address must be specified for the primary/secondary DNS servers.");
         }
 
@@ -554,7 +554,7 @@ if (isset($config['interfaces'][$if]['dhcpd6track6allowoverride'])) {
                         <input name="dns1" type="text" id="dns1" value="<?=$pconfig['dns1'];?>" /><br />
                         <input name="dns2" type="text" id="dns2" value="<?=$pconfig['dns2'];?>" />
                         <div class="hidden" data-for="help_for_dns">
-                          <?= gettext('Leave blank to use the system default DNS servers: This interface IP address if a DNS service is enabled or the configured global DNS servers.') ?>
+                          <?= gettext('Leave blank to use the system default DNS servers: This interface IP address if a DNS service is enabled or the configured global DNS servers. Type "none" in the first field for no DNS server assignment.') ?>
                         </div>
                       </td>
                     </tr>
