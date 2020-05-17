@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
 
-    if ((!empty($pconfig['radns1']) && !is_ipaddrv6($pconfig['radns1'])) || ($pconfig['radns2'] && !is_ipaddrv6($pconfig['radns2']))) {
+    if ((!empty($pconfig['radns1']) && $pconfig['radns1'] != "none" && !is_ipaddrv6($pconfig['radns1'])) || ($pconfig['radns2'] && !is_ipaddrv6($pconfig['radns2']))) {
         $input_errors[] = gettext("A valid IPv6 address must be specified for the primary/secondary DNS servers.");
     }
     if (!empty($pconfig['radomainsearchlist'])) {
@@ -169,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (!empty($pconfig['radns1'])) {
             $config['dhcpdv6'][$if]['radnsserver'][] = $pconfig['radns1'];
         }
-        if ($pconfig['radns2']) {
+        if (!empty($pconfig['radns2'])) {
             $config['dhcpdv6'][$if]['radnsserver'][] = $pconfig['radns2'];
         }
         $config['dhcpdv6'][$if]['rasamednsasdhcp6'] = !empty($pconfig['rasamednsasdhcp6']);
@@ -397,7 +397,7 @@ include("head.inc");
                       <input name="radns1" type="text" value="<?=$pconfig['radns1'];?>" /><br />
                       <input name="radns2" type="text" value="<?=$pconfig['radns2'];?>" />
                       <div class="hidden" data-for="help_for_radns">
-                        <?= gettext('Leave blank to use the system default DNS servers: This interface IP address if a DNS service is enabled or the configured global DNS servers.') ?>
+                        <?= gettext('Leave blank to use the system default DNS servers: This interface IP address if a DNS service is enabled or the configured global DNS servers. Type "none" in the first field for no DNS servers.') ?>
                       </div>
                       <br />
                       <input id="rasamednsasdhcp6" name="rasamednsasdhcp6" type="checkbox" value="yes" <?=!empty($pconfig['rasamednsasdhcp6']) ? "checked='checked'" : "";?> />
