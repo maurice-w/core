@@ -153,10 +153,6 @@ function unbound_generate_config()
         if (!empty($general['dns64prefix'])) {
             $dns64_config .= "\ndns64-prefix: {$general['dns64prefix']}";
         }
-        if (!empty($general['noarecords'])) {
-            $module_config .= 'respip ';
-            $dns64_config .= "\nresponse-ip: 0.0.0.0/0 redirect";
-        }
         $module_config .= 'dns64 ';
     }
     if (!empty($general['dnssec'])) {
@@ -601,6 +597,10 @@ function unbound_add_host_entries($ifconfig_details)
                 }
             }
         }
+    }
+
+    if (!empty($general['noarecords'])) {
+        $unbound_entries .= "local-zone: \".\" block_a\n";
     }
 
     file_put_contents('/var/unbound/host_entries.conf', $unbound_entries);
