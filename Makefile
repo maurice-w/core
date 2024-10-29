@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023 Franco Fichtner <franco@opnsense.org>
+# Copyright (c) 2014-2024 Franco Fichtner <franco@opnsense.org>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -89,7 +89,8 @@ CORE_VERSION?=	${CORE_COMMIT:[1]}
 CORE_REVISION?=	${CORE_COMMIT:[2]}
 CORE_HASH?=	${CORE_COMMIT:[3]}
 
-CORE_DEVEL?=	master
+CORE_MAINS=	master main
+CORE_MAIN?=	${CORE_MAINS:[1]}
 CORE_STABLE?=	stable/${CORE_ABI}
 
 _CORE_SERIES=	${CORE_VERSION:S/./ /g}
@@ -118,12 +119,12 @@ CORE_WWW?=		https://opnsense.org/
 
 CORE_COPYRIGHT_HOLDER?=	Deciso B.V.
 CORE_COPYRIGHT_WWW?=	https://www.deciso.com/
-CORE_COPYRIGHT_YEARS?=	2014-2023
+CORE_COPYRIGHT_YEARS?=	2014-2024
 
 CORE_DEPENDS_aarch64?=	py${CORE_PYTHON}-duckdb \
 			py${CORE_PYTHON}-numpy \
 			py${CORE_PYTHON}-pandas \
-			suricata-devel
+			suricata
 
 CORE_DEPENDS_amd64?=	beep \
 			${CORE_DEPENDS_aarch64}
@@ -132,6 +133,7 @@ CORE_DEPENDS?=		ca_root_nss \
 			choparp \
 			cpustats \
 			dhcp6c \
+			dhcrelay \
 			dnsmasq \
 			dpinger \
 			expiretable \
@@ -141,7 +143,6 @@ CORE_DEPENDS?=		ca_root_nss \
 			hostapd \
 			ifinfo \
 			iftop \
-			isc-dhcp44-relay \
 			isc-dhcp44-server \
 			kea \
 			lighttpd \
@@ -177,6 +178,7 @@ CORE_DEPENDS?=		ca_root_nss \
 			pkg \
 			py${CORE_PYTHON}-Jinja2 \
 			py${CORE_PYTHON}-dnspython \
+			py${CORE_PYTHON}-ldap3 \
 			py${CORE_PYTHON}-netaddr \
 			py${CORE_PYTHON}-requests \
 			py${CORE_PYTHON}-sqlite3 \
@@ -185,16 +187,21 @@ CORE_DEPENDS?=		ca_root_nss \
 			radvd \
 			rrdtool \
 			samplicator \
-			squid \
-			squid-langpack \
 			strongswan \
 			sudo \
 			syslog-ng \
 			unbound \
-			wireguard-kmod \
 			wpa_supplicant \
 			zip \
+			${CORE_ADDITIONS} \
 			${CORE_DEPENDS_${CORE_ARCH}}
+
+.for CONFLICT in ${CORE_CONFLICTS}
+CORE_CONFLICTS+=	${CONFLICT}-devel
+.endfor
+
+# assume conflicts are just for plugins
+CORE_CONFLICTS:=	${CORE_CONFLICTS:S/^/os-/g:O}
 
 WRKDIR?=${.CURDIR}/work
 WRKSRC?=${WRKDIR}/src
@@ -247,8 +254,8 @@ manifest:
 		fi; \
 	done
 	@echo "}"
-	@if [ -f ${WRKSRC}/usr/local/opnsense/version/core ]; then \
-	    echo "annotations $$(cat ${WRKSRC}/usr/local/opnsense/version/core)"; \
+	@if [ -f ${WRKSRC}${LOCALBASE}/opnsense/version/core ]; then \
+	    echo "annotations $$(cat ${WRKSRC}${LOCALBASE}/opnsense/version/core)"; \
 	fi
 
 .if ${.TARGETS:Mupgrade}
@@ -274,6 +281,7 @@ install:
 	# try to update the current system if it looks like one
 	@touch ${LOCALBASE}/opnsense/www/index.php
 .endif
+	@rm -f /tmp/opnsense_acl_cache.json /tmp/opnsense_menu_cache.xml
 
 collect:
 	@(cd ${.CURDIR}/src; find * -type f) | while read FILE; do \
@@ -326,7 +334,7 @@ package: plist-check package-check clean-wrksrc
 	@${CORE_MAKE} DESTDIR=${WRKSRC} install
 	@echo " done"
 	@echo ">>> Generated version info for ${CORE_NAME}-${CORE_PKGVERSION}:"
-	@cat ${WRKSRC}/usr/local/opnsense/version/core
+	@cat ${WRKSRC}${LOCALBASE}/opnsense/version/core
 	@echo -n ">>> Generating metadata for ${CORE_NAME}-${CORE_PKGVERSION}..."
 	@${CORE_MAKE} DESTDIR=${WRKSRC} metadata
 	@echo " done"
@@ -389,6 +397,9 @@ lint-model:
 		done; \
 	done
 
+lint-acl:
+	@${.CURDIR}/Scripts/dashboard-acl.sh
+
 SCRIPTDIRS!=	find ${.CURDIR}/src/opnsense/scripts -type d -depth 1
 
 lint-exec:
@@ -406,15 +417,11 @@ LINTBIN?=	${.CURDIR}/contrib/parallel-lint/parallel-lint
 lint-php:
 	@${LINTBIN} src
 
-lint: plist-check lint-shell lint-xml lint-model lint-exec lint-php
+lint: plist-check lint-shell lint-xml lint-model lint-acl lint-exec lint-php
 
 sweep:
 	find ${.CURDIR}/src -type f -name "*.map" -print0 | \
 	    xargs -0 -n1 rm
-	if grep -nr sourceMappingURL= ${.CURDIR}/src; then \
-		echo "Mentions of sourceMappingURL must be removed"; \
-		exit 1; \
-	fi
 	find ${.CURDIR}/src ! -name "*.min.*" ! -name "*.svg" \
 	    ! -name "*.ser" -type f -print0 | \
 	    xargs -0 -n1 ${.CURDIR}/Scripts/cleanfile
@@ -462,7 +469,7 @@ license: debug
 
 sync: license plist-fix
 
-ARGS=	diff mfc
+ARGS=	diff feed mfc
 
 # handle argument expansion for required targets
 .for TARGET in ${.TARGETS}
@@ -492,6 +499,9 @@ diff: ensure-stable
 		git diff --stat -p ${CORE_STABLE} ${.CURDIR}/${diff_ARGS:[1]}; \
 	fi
 
+feed: ensure-stable
+	@git log --stat -p --reverse ${CORE_STABLE}...${feed_ARGS:[1]}~1
+
 mfc: ensure-stable clean-mfcdir
 .for MFC in ${mfc_ARGS}
 .if exists(${MFC})
@@ -502,7 +512,7 @@ mfc: ensure-stable clean-mfcdir
 	@mv ${MFCDIR}/$$(basename ${MFC}) ${MFC}
 	@git add -f .
 	@if ! git diff --quiet HEAD; then \
-		git commit -m "${MFC}: sync with ${CORE_DEVEL}"; \
+		git commit -m "${MFC}: sync with ${CORE_MAIN}"; \
 	fi
 .else
 	@git checkout ${CORE_STABLE}
@@ -510,19 +520,24 @@ mfc: ensure-stable clean-mfcdir
 		git cherry-pick --abort; \
 	fi
 .endif
-	@git checkout ${CORE_DEVEL}
+	@git checkout ${CORE_MAIN}
 .endfor
 
 stable:
 	@git checkout ${CORE_STABLE}
 
-devel ${CORE_DEVEL}:
-	@git checkout ${CORE_DEVEL}
+${CORE_MAINS}:
+	@git checkout ${CORE_MAIN}
 
 rebase:
 	@git checkout ${CORE_STABLE}
 	@git rebase -i
-	@git checkout ${CORE_DEVEL}
+	@git checkout ${CORE_MAIN}
+
+reset:
+	@git checkout ${CORE_STABLE}
+	@git reset --hard HEAD~1
+	@git checkout ${CORE_MAIN}
 
 log: ensure-stable
 	@git log --stat -p ${CORE_STABLE}
@@ -530,7 +545,7 @@ log: ensure-stable
 push:
 	@git checkout ${CORE_STABLE}
 	@git push
-	@git checkout ${CORE_DEVEL}
+	@git checkout ${CORE_MAIN}
 
 migrate:
 	@src/opnsense/mvc/script/run_migrations.php
@@ -543,8 +558,7 @@ test: debug
 		echo "Installed version does not match, expected ${CORE_PKGVERSION}"; \
 		exit 1; \
 	fi
-	@cd ${.CURDIR}/src/opnsense/mvc/tests && \
-	    phpunit --configuration PHPunit.xml || true; \
+	@cd ${.CURDIR}/src/opnsense/mvc/tests && phpunit || true; \
 	    rm -f .phpunit.result.cache
 
 checkout:

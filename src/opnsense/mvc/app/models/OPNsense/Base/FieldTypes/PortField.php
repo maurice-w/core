@@ -28,7 +28,6 @@
 
 namespace OPNsense\Base\FieldTypes;
 
-use OPNsense\Phalcon\Filter\Validation\Validator\InclusionIn;
 use OPNsense\Firewall\Alias;
 
 /**

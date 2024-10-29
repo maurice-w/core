@@ -29,7 +29,6 @@
  */
 
 require_once("guiconfig.inc");
-require_once("rrd.inc");
 require_once("system.inc");
 require_once("interfaces.inc");
 require_once("plugins.inc.d/ntpd.inc");
@@ -49,7 +48,7 @@ $copy_fields = [
     'maxclock',
     'nomodify',
     'nopeer',
-    'noquery',
+    'query',
     'noserve',
     'notrap',
     'orphan',
@@ -63,6 +62,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     foreach ($copy_fields as $fieldname) {
         $pconfig[$fieldname] = isset($a_ntpd[$fieldname]) ? $a_ntpd[$fieldname] : '';
     }
+
+    // inverted
+    $pconfig['noquery'] = empty($pconfig['query']);
 
     // base64 encoded
     $pconfig['leapsec'] = base64_decode(chunk_split($pconfig['leapsec']));
@@ -104,6 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 
     if (count($input_errors) == 0) {
+        // inverted
+        $pconfig['query'] = empty($pconfig['noquery']);
+
         // copy fields
         foreach ($copy_fields as $fieldname) {
             if (!empty($pconfig[$fieldname])) {
@@ -149,7 +154,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         write_config("Updated NTP Server Settings");
 
-        rrd_configure();
         ntpd_configure_do();
         system_cron_configure();
 
@@ -340,9 +344,10 @@ include("head.inc");
                       endforeach;?>
                       </select>
                       <div class="hidden" data-for="help_for_interfaces">
-                        <?=gettext("Interfaces without an IP address will not be shown."); ?>
+                        <?=gettext("Interfaces to listen on and send outgoing queries."); ?>
                         <br /><?=gettext("Selecting no interfaces will listen on all interfaces with a wildcard."); ?>
                         <br /><?=gettext("Selecting all interfaces will explicitly listen on only the interfaces/IPs specified."); ?>
+                        <br /><?=gettext("Interfaces without an IP address will not be shown."); ?>
                       </div>
                     </td>
                   </tr>

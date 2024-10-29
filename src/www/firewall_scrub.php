@@ -221,7 +221,7 @@ $( document ).ready(function() {
   <section class="page-content-main">
     <div class="container-fluid">
       <div class="row">
-        <?php print_service_banner('firewall'); ?>
+        <?php print_firewall_banner() ?>
         <?php if (isset($savemsg)) print_info_box($savemsg); ?>
         <?php if (is_subsystem_dirty('filter')): ?><p>
         <?php print_info_box_apply(gettext("The firewall rule configuration has been changed.<br />You must apply the changes in order for them to take effect."));?>
@@ -380,7 +380,7 @@ $( document ).ready(function() {
 
                     </td>
                     <td>
-                        <?=$scrubEntry['descr'];?>
+                        <?= $scrubEntry['descr'] ?? '' ?>
                     </td>
                     <td>
                         <a data-id="<?=$i;?>" name="move_<?=$i;?>_x" data-toggle="tooltip" title="<?= html_safe(gettext("Move selected rules before this rule")) ?>" class="act_move btn btn-default btn-xs">

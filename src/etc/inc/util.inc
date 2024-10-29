@@ -935,16 +935,6 @@ function url_safe($format, $args = [])
     return vsprintf($format, $args);
 }
 
-function cache_safe($url)
-{
-    $info = stat('/usr/local/opnsense/www/index.php');
-    if (!empty($info['mtime'])) {
-        return "{$url}?v=" . substr(md5($info['mtime']), 0, 16);
-    }
-
-    return $url;
-}
-
 function mwexec($command, $mute = false)
 {
     $oarr = [];
@@ -1140,18 +1130,20 @@ function get_sysctl($names)
 /*
  * get_single_sysctl($name)
  * Wrapper for get_sysctl() to simplify read of a single sysctl value
- * return the value for sysctl $name or empty string if it doesn't exist
+ * return the value for sysctl $name or null if it does not exist
  */
 function get_single_sysctl($name)
 {
-    if (empty($name)) {
-        return '';
+    $ret = null;
+
+    if (!empty($name)) {
+        $value = get_sysctl($name);
+        if (isset($value[$name])) {
+            $ret = $value[$name];
+        }
     }
-    $value = get_sysctl($name);
-    if (!isset($value[$name])) {
-        return '';
-    }
-    return $value[$name];
+
+    return $ret;
 }
 
 /*

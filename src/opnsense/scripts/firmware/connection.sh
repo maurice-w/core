@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2021-2022 Franco Fichtner <franco@opnsense.org>
+# Copyright (C) 2021-2024 Franco Fichtner <franco@opnsense.org>
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -24,16 +24,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-LOCKFILE="/tmp/pkg_upgrade.progress"
-TEE="/usr/bin/tee -a"
+. /usr/local/opnsense/scripts/firmware/config.sh
 
 : > ${LOCKFILE}
 
 URL=$(opnsense-update -M)
+URLX=$(opnsense-update -X)
 POPT="-c4 -s1500"
 
 HOST=${URL#*://}
 HOST=${HOST%%/*}
+
 IPV4=$(host -t A ${HOST} | head -n 1 | cut -d\  -f4)
 IPV6=$(host -t AAAA ${HOST} | head -n 1 | cut -d\  -f5)
 
@@ -62,5 +63,11 @@ if [ -n "${IPV6}" -a -z "${IPV6%%*:*}" ]; then
 else
 	echo "No IPv6 address could be found for host: ${HOST}" | ${TEE} ${LOCKFILE}
 fi
+
+for HOST in $(/usr/local/opnsense/scripts/firmware/hostnames.sh); do
+	echo "Checking server certificate for host: ${HOST}" | ${TEE} ${LOCKFILE}
+	# XXX -crl_check and -crl_check_all are possible but -CRL pass is not working
+	echo | openssl s_client -quiet -no_ign_eof ${HOST}:443 2>&1 | ${TEE} ${LOCKFILE}
+done
 
 echo '***DONE***' >> ${LOCKFILE}

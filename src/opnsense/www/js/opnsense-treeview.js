@@ -108,7 +108,7 @@ function update_tree(src_data, target)
             openedIcon: $('<i class="fa fa-minus-square-o"></i>'),
             onCreateLi: function(node, $li) {
                 let n_title = $li.find('.jqtree-title');
-                n_title.text(n_title.text().replace('&gt;','\>').replace('&lt;','\<'));
+                n_title.text(n_title.text().replaceAll('&gt;','\>').replaceAll('&lt;','\<'));
                 if (node.value !== undefined) {
                     $li.find('.jqtree-element').append(
                         '&nbsp; <strong>:</strong> &nbsp;' + node.value
@@ -130,6 +130,24 @@ function update_tree(src_data, target)
         // open node on label click
         $tree.bind('tree.click', function(e) {
             $tree.tree('toggle', e.node);
+        });
+        // open table on label dblclick
+        $tree.bind('tree.dblclick',function(event) {
+            let table = treeview_node_to_table(event.node);
+            if (table) {
+                BootstrapDialog.show({
+                    title: event.node.id,
+                    message: table,
+                    type: BootstrapDialog.TYPE_INFO,
+                    draggable: true,
+                    buttons: [{
+                        label: '<i class="fa fa-fw fa-close"></i>',
+                        action: function(dialogItself){
+                            dialogItself.close();
+                        }
+                    }]
+                });
+            }
         });
     } else {
         let curent_state = $tree.tree('getState');
@@ -183,4 +201,66 @@ function tree_delayed_live_search()
             }
         }
     }, 500);
+}
+
+/**
+ * convert treeview node to table, when there are children
+ * @param {*} node
+ * @returns table|null
+ */
+function treeview_node_to_table(node)
+{
+    let data = node.getData();
+    if (data === undefined || data.length == 0) {
+        return;
+    }
+    let table = $("<table class='table table-bordered table-striped table-condensed table-hover'/>");
+    if (data[0].children) {
+        /* recordset */
+        let fieldnames = {}
+        let dataset = [];
+        for (i=0 ; i < data.length  ; ++i) {
+            let record = {'__id__': data[i].id};
+            for (j=0; j < data[i].children.length; j++) {
+                if (data[i].children[j].children) {
+                    continue
+                } else if (fieldnames[data[i].children[j].name] === undefined) {
+                    fieldnames[data[i].children[j].name] = j;
+                }
+                record[data[i].children[j].name] =  data[i].children[j].value;
+            }
+            dataset.push(record);
+        }
+        if (Object.keys(fieldnames).length) {
+            fieldnames = Object.entries(fieldnames).sort(([,a],[,b]) => a-b);
+            let tr = $("<tr/>");
+            tr.append($("<th/>")); /* id field */
+            for (i = 0; i < fieldnames.length;  ++i) {
+                tr.append($("<th/>").html(fieldnames[i][0]));
+            }
+            table.append($("<thead/>").append(tr));
+            let tbody = $("<tbody/>");
+            for (i = 0; i < dataset.length ; ++i) {
+                tr = $("<tr/>");
+                tr.append($("<td/>").html(dataset[i]['__id__']));
+                for (j = 0; j < fieldnames.length; ++j) {
+                    tr.append($("<td/>").html(dataset[i][fieldnames[j][0]] ?? ''));
+                }
+                tbody.append(tr);
+            }
+            table.append(tbody);
+        }
+    }
+    if (table.children().length === 0) {
+        /* single record */
+        let tbody = $("<tbody/>");
+        for (i=0 ; i < data.length  ; ++i) {
+            let tr = $("<tr/>");
+            tr.append($("<td/>").html(data[i].name));
+            tr.append($("<td/>").html(data[i].value));
+            tbody.append(tr);
+        }
+        table.append(tbody);
+    }
+    return table;
 }

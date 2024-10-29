@@ -60,3 +60,10 @@ def syslog_info(message):
 
 def syslog_error(message):
     emit_syslog(syslog.LOG_ERR, message)
+
+
+def syslog_auth_info(message):
+    emit_syslog(syslog.LOG_AUTH | syslog.LOG_INFO, message)
+
+def syslog_auth_error(message):
+    emit_syslog(syslog.LOG_AUTH | syslog.LOG_ERR, message)

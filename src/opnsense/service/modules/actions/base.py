@@ -24,6 +24,7 @@
     POSSIBILITY OF SUCH DAMAGE.
 """
 from .. import syslog_notice
+from ..session import xucred
 
 
 class BaseAction:
@@ -41,6 +42,32 @@ class BaseAction:
         self.parameters = action_parameters.get('parameters', None)
         self.message = action_parameters.get('message', None)
         self.description = action_parameters.get('description', '')
+        if action_parameters.get('cache_ttl', '').isdigit():
+            self.cache_ttl = int(action_parameters['cache_ttl'])
+        else:
+            self.cache_ttl = None
+        self.allowed_groups = set()
+        for item in action_parameters.get('allowed_groups', '').split(','):
+            if item:
+                 self.allowed_groups.add(item)
+        self.full_command = action_parameters.get('__full_command', '')
+
+    def is_allowed(self, session : xucred = None):
+        """ Check if action is allowed for the session provided.
+            An action config may optionally supply allowed_groups (or generic in configd.conf) as constraint for
+            the call in question.
+        :param session: xucred session object
+        :return: bool
+        """
+        memberOf = session.get_groups() if isinstance(session, xucred) else []
+        return len(self.allowed_groups) == 0 or len(self.allowed_groups & memberOf) > 0
+
+    def requires(self):
+        """
+        :return: list of requirements for logging purposes
+        """
+        return ','.join(self.allowed_groups)
+
 
     def _cmd_builder(self, parameters):
         """ basic (shell) script command builder, uses action command, expected parameter phrase and given parameters
@@ -72,10 +99,11 @@ class BaseAction:
 
         return script_command
 
-    def execute(self, parameters, message_uuid):
+    def execute(self, parameters, message_uuid, connection):
         """ execute an action
         :param parameters: list of parameters
         :param message_uuid: unique message id
+        :param connection: response socket
         :return:
         """
         # send-out syslog message

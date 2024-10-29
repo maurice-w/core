@@ -99,7 +99,7 @@ class BackupController extends ApiControllerBase
                 if (isset($xmlNode->revision)) {
                     $cfg_item = [
                         'time' => (string)$xmlNode->revision->time,
-                        'time_iso' => date('c', (string)$xmlNode->revision->time),
+                        'time_iso' => date('c', (int)$xmlNode->revision->time),
                         'description' => (string)$xmlNode->revision->description,
                         'username' => (string)$xmlNode->revision->username,
                         'filesize' => filesize($filename),
@@ -110,7 +110,7 @@ class BackupController extends ApiControllerBase
             }
             // sort newest first
             usort($result['items'], function ($item1, $item2) {
-                return $item1['time'] < $item2['time'];
+                return ($item1['time'] < $item2['time']) ? 1 : -1;
             });
         }
         return $result;
@@ -202,9 +202,7 @@ class BackupController extends ApiControllerBase
                     $this->response->setRawHeader("Content-length: " . filesize($filename));
                     $this->response->setRawHeader("Pragma: no-cache");
                     $this->response->setRawHeader("Expires: 0");
-                    ob_clean();
-                    flush();
-                    readfile($filename);
+                    $this->response->setContent(fopen($filename, 'r'));
                     break;
                 }
             }

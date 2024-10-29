@@ -30,7 +30,6 @@
 
 require_once("guiconfig.inc");
 require_once("filter.inc");
-require_once("rrd.inc");
 require_once("system.inc");
 require_once("interfaces.inc");
 
@@ -158,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // no validation errors, delete entry
             unset($config['interfaces'][$id]['enable']);
-            interface_bring_down($id);
+            interface_reset($id);
 
             if (isset($config['dhcpd'][$id])) {
                 unset($config['dhcpd'][$id]);
@@ -244,8 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               if (!is_array($ifdev) && ($ifname == 'lan' || $ifname == 'wan' || substr($ifname, 0, 3) == 'opt')) {
                   $reloadif = false;
                   if (!empty($config['interfaces'][$ifname]['if']) && $config['interfaces'][$ifname]['if'] != $ifdev) {
-                      interface_bring_down($ifname);
-                      /* Mark this to be reconfigured in any case. */
+                      interface_reset($ifname);
                       $reloadif = true;
                   }
                   $config['interfaces'][$ifname]['if'] = $ifdev;
@@ -265,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   }
 
                   foreach ($a_devices as $device) {
-                      if (!isset($device['configurable']) || $device['configurable'] == true) {
+                      if ($device['configurable']) {
                           continue;
                       }
                       if (preg_match('/' . $device['pattern'] . '/', $ifdev)) {
@@ -299,11 +297,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   }
               }
           }
+          /* XXX huh? */
           write_config();
           if ($changes > 0) {
-              // reload filter, rrd when interfaces have changed (original from apply action)
               filter_configure();
-              rrd_configure();
           }
           header(url_safe('Location: /interfaces_assign.php'));
           exit;
@@ -420,7 +417,7 @@ include("head.inc");
                       <?= legacy_html_escape_form_data($iface) ?>
                       <tr>
                         <td>
-                          <a href="/interfaces.php?if=<?= html_safe($ifname) ?>" target="_blank">[<?= $iface['descr'] ?>]</a>
+                          <a href="/interfaces.php?if=<?= html_safe($ifname) ?>">[<?= $iface['descr'] ?>]</a>
                         </td>
                         <td><?= $ifname ?></td>
                         <td>

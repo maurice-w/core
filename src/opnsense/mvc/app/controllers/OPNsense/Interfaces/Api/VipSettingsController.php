@@ -44,14 +44,13 @@ class VipSettingsController extends ApiMutableModelControllerBase
      */
     private function getVipOverlay()
     {
-        $overlay = ['network' => '', 'subnet' => '', 'subnet_bits' => ''];
+        $overlay = null;
         $tmp = $this->request->getPost('vip');
         if (!empty($tmp['network'])) {
+            $overlay = ['subnet' => '', 'subnet_bits' => ''];
             $parts = explode('/', $tmp['network'], 2);
             $overlay['subnet'] = $parts[0];
-            if (count($parts) == 1 || $parts[1] == '') {
-                $overlay['subnet_bits'] = strpos($parts[0], ':') !== false ? 128 : 32;
-            } else {
+            if (count($parts) == 2 && $parts[1] != '') {
                 $overlay['subnet_bits'] = $parts[1];
             }
         }
@@ -187,6 +186,22 @@ class VipSettingsController extends ApiMutableModelControllerBase
         if (!empty($validations)) {
             throw new UserException(implode('<br/>', array_slice($validations, 0, 5)), gettext("Item in use by"));
         }
+
+        if ($node != null && (string)$node->mode == 'carp') {
+            foreach ($this->getModel()->vip->iterateItems() as $vip) {
+                if ((string)$vip->mode == 'ipalias' && (string)$vip->vhid == (string)$node->vhid) {
+                    $vhid = (string)$node->vhid;
+                    throw new UserException(
+                        sprintf(
+                            gettext("Cannot delete CARP Virtual IP, IP Alias with VHID Group %s still exists."),
+                            $vhid
+                        ),
+                        gettext("Error")
+                    );
+                }
+            }
+        }
+
         $response = $this->delBase("vip", $uuid);
         if (($response['result'] ?? '') == 'deleted') {
             $addr = (string)$node->subnet;

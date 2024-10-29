@@ -28,10 +28,10 @@
 
 namespace OPNsense\IDS\Api;
 
-use Phalcon\Filter\FilterFactory;
 use OPNsense\Base\ApiMutableModelControllerBase;
 use OPNsense\Core\Backend;
 use OPNsense\Core\Config;
+use OPNsense\Core\SanitizeFilter;
 use OPNsense\Base\UIModelGrid;
 
 /**
@@ -42,6 +42,22 @@ class SettingsController extends ApiMutableModelControllerBase
 {
     protected static $internalModelName = 'ids';
     protected static $internalModelClass = '\OPNsense\IDS\IDS';
+    private $modelHandle = null;
+
+    /**
+     * Get (or create) model object
+     * @return null|BaseModel
+     * @throws \ReflectionException
+     */
+    protected function getModel()
+    {
+        if ($this->modelHandle == null) {
+            $this->modelHandle = (new \ReflectionClass(static::$internalModelClass))->newInstance();
+        }
+
+        return $this->modelHandle;
+    }
+
 
     /**
      * Query non layered model items
@@ -68,12 +84,8 @@ class SettingsController extends ApiMutableModelControllerBase
     public function searchInstalledRulesAction()
     {
         if ($this->request->isPost()) {
-            $this->sessionClose();
             // create filter to sanitize input data
-            $filter = (new FilterFactory())->newInstance();
-            $filter->set('query', function ($value) {
-                return preg_replace("/[^0-9,a-z,A-Z, ,*,\-,_,.,\#]/", "", $value);
-            });
+            $filter = new SanitizeFilter();
 
             // fetch query parameters (limit results to prevent out of memory issues)
             $itemsPerPage = $this->request->getPost('rowCount', 'int', 9999);
@@ -157,7 +169,6 @@ class SettingsController extends ApiMutableModelControllerBase
     {
         // request list of installed rules
         if (!empty($sid)) {
-            $this->sessionClose();
             $backend = new Backend();
             $response = $backend->configdpRun("ids query rules", array(1, 0,'sid/' . $sid));
             $data = json_decode($response, true);
@@ -215,7 +226,6 @@ class SettingsController extends ApiMutableModelControllerBase
      */
     public function listRuleMetadataAction()
     {
-        $this->sessionClose();
         $response = (new Backend())->configdRun("ids list rulemetadata");
         $data = json_decode($response, true);
         if ($data != null) {
@@ -282,7 +292,6 @@ class SettingsController extends ApiMutableModelControllerBase
     public function getRulesetpropertiesAction()
     {
         $result = array('properties' => array());
-        $this->sessionClose();
         $backend = new Backend();
         $response = $backend->configdRun("ids list installablerulesets");
         $data = json_decode($response, true);
@@ -303,7 +312,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * Update ruleset properties
      * @return array result status
      * @throws \Exception when config action fails
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function setRulesetpropertiesAction()
@@ -311,7 +320,6 @@ class SettingsController extends ApiMutableModelControllerBase
         $result = array("result" => "failed");
         if ($this->request->isPost() && $this->request->hasPost("properties")) {
             // only update properties available in "ids list installablerulesets"
-            $this->sessionClose();
             $backend = new Backend();
             $response = $backend->configdRun("ids list installablerulesets");
             $data = json_decode($response, true);
@@ -356,7 +364,6 @@ class SettingsController extends ApiMutableModelControllerBase
     public function listRulesetsAction()
     {
         $result = array();
-        $this->sessionClose();
         $result['rows'] = $this->listInstallableRules();
         // sort by description
         usort($result['rows'], function ($item1, $item2) {
@@ -377,7 +384,6 @@ class SettingsController extends ApiMutableModelControllerBase
      */
     public function getRulesetAction($id)
     {
-        $this->sessionClose();
         $rules = $this->listInstallableRules();
         foreach ($rules as $rule) {
             if ($rule['filename'] == $id) {
@@ -392,7 +398,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * @param $filename rule filename (key)
      * @return array result status
      * @throws \Exception when configd action fails
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function setRulesetAction($filename)
@@ -400,7 +406,6 @@ class SettingsController extends ApiMutableModelControllerBase
         $result = array("result" => "failed");
         if ($this->request->isPost()) {
             // we're only allowed to edit filenames which have an install ruleset, request valid ones from configd
-            $this->sessionClose();
             $backend = new Backend();
             $response = $backend->configdRun("ids list installablerulesets");
             $data = json_decode($response, true);
@@ -429,14 +434,13 @@ class SettingsController extends ApiMutableModelControllerBase
      * @param $enabled desired state enabled(1)/disabled(1), leave empty for toggle
      * @return array status 0/1 or error
      * @throws \Exception
-     * @throws \Phalcon\Filter\Validation\Exception
+     * @throws \OPNsense\Base\ValidationException
      */
     public function toggleRulesetAction($filenames, $enabled = null)
     {
         $update_count = 0;
         $result = array("status" => "none");
         if ($this->request->isPost()) {
-            $this->sessionClose();
             $backend = new Backend();
             $response = $backend->configdRun("ids list installablerulesets");
             $data = json_decode($response, true);
@@ -472,13 +476,12 @@ class SettingsController extends ApiMutableModelControllerBase
      * @param string|int $enabled desired state enabled(1)/disabled(1), leave empty for toggle
      * @return array empty
      * @throws \Exception when configd action fails
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function toggleRuleAction($sids, $enabled = null)
     {
         if ($this->request->isPost()) {
-            $this->sessionClose();
             $update_count = 0;
             foreach (explode(",", $sids) as $sid) {
                 $ruleinfo = $this->getRuleInfoAction($sid);
@@ -527,14 +530,13 @@ class SettingsController extends ApiMutableModelControllerBase
      * @param $sid item unique id
      * @return array result status
      * @throws \Exception when configd action fails
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function setRuleAction($sid)
     {
         $result = array("result" => "failed");
         if ($this->request->isPost() && $this->request->hasPost("action")) {
-            $this->sessionClose();
             if ($this->request->hasPost('enabled')) {
                 $this->toggleRuleAction($sid, $this->request->getPost("enabled", "int", null));
             }
@@ -561,14 +563,14 @@ class SettingsController extends ApiMutableModelControllerBase
      */
     public function searchUserRuleAction()
     {
-        return $this->searchBase("userDefinedRules.rule", array("enabled", "action", "description"), "description");
+        return $this->searchBase("userDefinedRules.rule", null, "description");
     }
 
     /**
      * Update user defined rules
      * @param string $uuid internal id
      * @return array save result + validation output
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function setUserRuleAction($uuid)
@@ -579,7 +581,7 @@ class SettingsController extends ApiMutableModelControllerBase
     /**
      * Add new user defined rule
      * @return array save result + validation output
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function addUserRuleAction()
@@ -602,7 +604,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * Delete user rule item
      * @param string $uuid user rule internal id
      * @return array save status
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function delUserRuleAction($uuid)
@@ -615,7 +617,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * @param $uuid user defined rule internal id
      * @param $enabled desired state enabled(1)/disabled(1), leave empty for toggle
      * @return array save result
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function toggleUserRuleAction($uuid, $enabled = null)
@@ -630,14 +632,14 @@ class SettingsController extends ApiMutableModelControllerBase
      */
     public function searchPolicyAction()
     {
-        return $this->searchBase("policies.policy", array("enabled", "prio", "description"), "description");
+        return $this->searchBase("policies.policy", null, "description");
     }
 
     /**
      * Update policy
      * @param string $uuid internal id
      * @return array save result + validation output
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function setPolicyAction($uuid)
@@ -648,7 +650,7 @@ class SettingsController extends ApiMutableModelControllerBase
     /**
      * Add new policy
      * @return array save result + validation output
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function addPolicyAction()
@@ -671,7 +673,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * Delete policy item
      * @param string $uuid user rule internal id
      * @return array save status
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function delPolicyAction($uuid)
@@ -684,7 +686,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * @param $uuid user defined rule internal id
      * @param $enabled desired state enabled(1)/disabled(1), leave empty for toggle
      * @return array save result
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function togglePolicyAction($uuid, $enabled = null)
@@ -699,14 +701,18 @@ class SettingsController extends ApiMutableModelControllerBase
      */
     public function searchPolicyRuleAction()
     {
-        return $this->searchBase("rules.rule", array("sid", "enabled", "action"), "sid");
+        /* XXX: toggle search backend data for rule information as this action can be rather slow and we don't want
+                to enforce this on all callers */
+        $this->getModel()->rules->rule->queryRuleInfo();
+        $this->modelHandle = null;
+        return $this->searchBase("rules.rule", null, "sid");
     }
 
     /**
      * Update policy rule adjustment
      * @param string $uuid internal id
      * @return array save result + validation output
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function setPolicyRuleAction($uuid)
@@ -717,7 +723,7 @@ class SettingsController extends ApiMutableModelControllerBase
     /**
      * Add new policy rule adjustment
      * @return array save result + validation output
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function addPolicyRuleAction()
@@ -740,7 +746,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * Delete policy rule adjustment item
      * @param string $uuid internal id
      * @return array save status
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function delPolicyRuleAction($uuid)
@@ -753,7 +759,7 @@ class SettingsController extends ApiMutableModelControllerBase
      * @param $uuid user internal id
      * @param $enabled desired state enabled(1)/disabled(1), leave empty for toggle
      * @return array save result
-     * @throws \Phalcon\Filter\Validation\Exception when field validations fail
+     * @throws \OPNsense\Base\ValidationException when field validations fail
      * @throws \ReflectionException when not bound to model
      */
     public function togglePolicyRuleAction($uuid, $enabled = null)
@@ -762,7 +768,7 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /**
-     * return then number of custom defined policy rules
+     * return the number of custom defined policy rules
      */
     public function checkPolicyRuleAction()
     {

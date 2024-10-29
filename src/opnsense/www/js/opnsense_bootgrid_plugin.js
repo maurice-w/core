@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2021 Deciso B.V.
+ * Copyright (C) 2015-2024 Deciso B.V.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -136,6 +136,9 @@ $.fn.UIBootgrid = function (params) {
             requestHandler: function (request) {
                 return JSON.stringify(request);
             },
+            searchSettings: {
+                delay: 1000,
+            },
             datakey: 'uuid',
             useRequestHandlerOnGet: false,
             formatters: {
@@ -193,11 +196,20 @@ $.fn.UIBootgrid = function (params) {
                         return "<span class=\"fa fa-fw fa-times\" data-value=\"0\" data-row-id=\"" + row.uuid + "\"></span>";
                     }
                 },
-                bytes: function(column, row) {
+                bytes: function (column, row) {
                     if (row[column.id] && row[column.id] > 0) {
                         return byteFormat(row[column.id], 2);
                     }
                     return '';
+                },
+                statusled: function (column, row) {
+                    if (row[column.id] && row[column.id] == 'red') {
+                        return "<span class=\"fa fa-fw fa-square text-danger\"></span>";
+                   }  else if (row[column.id] && row[column.id] == 'green') {
+                        return "<span class=\"fa fa-fw fa-square text-success\"></span>";
+                    } else {
+                        return "<span class=\"fa fa-fw fa-square text-muted\"></span>";
+                    }
                 },
             },
             onBeforeRenderDialog: null
@@ -317,16 +329,30 @@ $.fn.UIBootgrid = function (params) {
     };
 
     /**
+     * init / clear save button
+     */
+    this.init_save_btn = function() {
+        let editDlg = this_grid.attr('data-editDialog');
+        let saveDlg = $("#btn_"+editDlg+"_save").unbind('click');
+        saveDlg.find('i').removeClass("fa fa-spinner fa-pulse");
+        return saveDlg;
+    }
+
+    /**
      * add event
      */
     this.command_add = function(event) {
         event.stopPropagation();
         let editDlg = this_grid.attr('data-editDialog');
         if (editDlg !== undefined) {
-            let saveDlg = $("#btn_"+editDlg+"_save").unbind('click');
+            let saveDlg = this_grid.init_save_btn();
             this_grid.show_edit_dialog(event, params['get']).done(function(){
                 $('#'+editDlg).trigger('opnsense_bootgrid_mapped', ['add']);
                 saveDlg.click(function(){
+                    if (saveDlg.find('i').hasClass('fa-spinner')) {
+                        return;
+                    }
+                    saveDlg.find('i').addClass("fa fa-spinner fa-pulse");
                     saveFormToEndpoint(params['add'], 'frm_' + editDlg, function(){
                             if ($('#'+editDlg).hasClass('modal')) {
                                 $("#"+editDlg).modal('hide');
@@ -335,7 +361,10 @@ $.fn.UIBootgrid = function (params) {
                             }
                             std_bootgrid_reload(this_grid.attr('id'));
                             this_grid.showSaveAlert(event);
-                        }, true);
+                            saveDlg.find('i').removeClass("fa fa-spinner fa-pulse");
+                        }, true, function(){
+                            saveDlg.find('i').removeClass("fa fa-spinner fa-pulse");
+                        });
                 });
             });
         } else {
@@ -365,9 +394,13 @@ $.fn.UIBootgrid = function (params) {
         let editDlg = this_grid.attr('data-editDialog');
         if (editDlg !== undefined) {
             let uuid = $(this).data("row-id") !== undefined ? $(this).data("row-id") : '';
-            let saveDlg = $("#btn_"+editDlg+"_save").unbind('click');
+            let saveDlg = this_grid.init_save_btn();
             this_grid.show_edit_dialog(event, params['get'] + uuid).done(function(){
                 saveDlg.unbind('click').click(function(){
+                    if (saveDlg.find('i').hasClass('fa-spinner')) {
+                        return;
+                    }
+                    saveDlg.find('i').addClass("fa fa-spinner fa-pulse");
                     saveFormToEndpoint(params['set']+uuid, 'frm_' + editDlg, function(){
                             if ($('#'+editDlg).hasClass('modal')) {
                                 $("#"+editDlg).modal('hide');
@@ -376,7 +409,10 @@ $.fn.UIBootgrid = function (params) {
                             }
                             std_bootgrid_reload(this_grid.attr('id'));
                             this_grid.showSaveAlert(event);
-                        }, true);
+                            saveDlg.find('i').removeClass("fa fa-spinner fa-pulse");
+                        }, true, function(){
+                            saveDlg.find('i').removeClass("fa fa-spinner fa-pulse");
+                        });
                 });
                 $('#'+editDlg).trigger('opnsense_bootgrid_mapped', ['edit']);
             });
@@ -446,7 +482,12 @@ $.fn.UIBootgrid = function (params) {
                     $('#'+editDlg).click();
                 }
                 // define save action
-                $("#btn_"+editDlg+"_save").unbind('click').click(function(){
+                let saveDlg = this_grid.init_save_btn();
+                saveDlg.click(function(){
+                    if (saveDlg.find('i').hasClass('fa-spinner')) {
+                        return;
+                    }
+                    saveDlg.find('i').addClass("fa fa-spinner fa-pulse");
                     saveFormToEndpoint(params['add'], 'frm_' + editDlg, function(){
                             if ($('#'+editDlg).hasClass('modal')) {
                                 $("#"+editDlg).modal('hide');
@@ -455,7 +496,10 @@ $.fn.UIBootgrid = function (params) {
                             }
                             std_bootgrid_reload(this_grid.attr('id'));
                             this_grid.showSaveAlert(event);
-                        }, true);
+                            saveDlg.find('i').removeClass("fa fa-spinner fa-pulse");
+                        }, true, function(){
+                            saveDlg.find('i').removeClass("fa fa-spinner fa-pulse");
+                        });
                 });
                 $('#'+editDlg).trigger('opnsense_bootgrid_mapped', ['copy']);
             });
@@ -538,6 +582,14 @@ $.fn.UIBootgrid = function (params) {
                         $(this).attr('title', 'Error: no tooltip match');
                     }
                     $(this).tooltip();
+                });
+
+                // tooltip when ellipsis is used (overflow on text elements without children)
+                $(this).find("td").bind('mouseenter', function(){
+                    let $this = $(this);
+                    if (this.offsetWidth < this.scrollWidth && !$this.attr('title') && $this.children().length == 0){
+                        $this.attr('title', $this.text()).tooltip({container: 'body', trigger: 'hover'}).tooltip('show');
+                    }
                 });
 
                 // hook all events

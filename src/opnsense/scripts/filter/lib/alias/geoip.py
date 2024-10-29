@@ -103,7 +103,7 @@ class GEOIP(BaseContentParser):
                                         country_blocks = zf.open(file_handles[result['address_sources'][proto]]).read()
                                         for line in country_blocks.decode().split('\n'):
                                             parts = line.split(',')
-                                            if len(parts) > 3 and parts[1] in country_codes:
+                                            if len(parts) > 1 and parts[1] in country_codes:
                                                 country_code = country_codes[parts[1]]
                                                 if country_code not in output_handles:
                                                     if not os.path.exists(cls._target_dir):
@@ -135,7 +135,7 @@ class GEOIP(BaseContentParser):
         do_update = True
         if os.path.isfile('%s/NL-IPv4' % self._target_dir):
             fstat = os.stat('%s/NL-IPv4' % self._target_dir)
-            if (time.time() - fstat.st_mtime) < (86400 - 90):
+            if (time.time() - fstat.st_mtime) < (86400 - 90) and fstat.st_size > 1024:
                 do_update = False
         if do_update:
             syslog.syslog(

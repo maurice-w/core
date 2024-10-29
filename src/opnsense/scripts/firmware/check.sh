@@ -37,12 +37,11 @@
 # downgrade_packages: array with { name: <package_name>, current_version: <current_version>, new_version: <new_version> }
 # upgrade_packages: array with { name: <package_name>, current_version: <current_version>, new_version: <new_version> }
 
-JSONFILE="/tmp/pkg_upgrade.json"
-LOCKFILE="/tmp/pkg_upgrade.progress"
-OUTFILE="/tmp/pkg_update.out"
-TEE="/usr/bin/tee -a"
+. /usr/local/opnsense/scripts/firmware/config.sh
 
 LICENSEFILE="/usr/local/opnsense/version/core.license"
+JSONFILE="/tmp/pkg_upgrade.json"
+OUTFILE="/tmp/pkg_update.out"
 
 CUSTOMPKG=${1}
 
@@ -94,7 +93,7 @@ echo "Currently running $(opnsense-version) at $(date)" >> ${LOCKFILE}
 # business subscriptions come with additional license metadata
 if [ -n "$(opnsense-update -x)" ]; then
     echo -n "Fetching subscription information, please wait... " >> ${LOCKFILE}
-    if fetch -qT 5 -o ${LICENSEFILE} "$(opnsense-update -M)/subscription" >> ${LOCKFILE} 2>&1; then
+    if fetch -qT 30 -o ${LICENSEFILE} "$(opnsense-update -M)/subscription" >> ${LOCKFILE} 2>&1; then
         echo "done" >> ${LOCKFILE}
     fi
 else

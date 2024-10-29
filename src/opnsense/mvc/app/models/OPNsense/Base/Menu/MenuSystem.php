@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2050-2020 Franco Fichtner <franco@opnsense.org>
+ * Copyright (C) 2015-2020 Franco Fichtner <franco@opnsense.org>
  * Copyright (C) 2015 Deciso B.V.
  * All rights reserved.
  *
@@ -29,8 +29,8 @@
 
 namespace OPNsense\Base\Menu;
 
+use OPNsense\Core\AppConfig;
 use OPNsense\Core\Config;
-use Phalcon\Di\FactoryDefault;
 
 /**
  * Class MenuSystem
@@ -112,14 +112,12 @@ class MenuSystem
     public function persist($nowait = true)
     {
         // fetch our model locations
-        if (!empty(FactoryDefault::getDefault()->get('config')->application->modelsDir)) {
-            $modelDirs = FactoryDefault::getDefault()->get('config')->application->modelsDir;
+        $appconfig = new AppConfig();
+        if (!empty($appconfig->application->modelsDir)) {
+            $modelDirs = $appconfig->application->modelsDir;
             if (!is_array($modelDirs) && !is_object($modelDirs)) {
                 $modelDirs = array($modelDirs);
             }
-        } else {
-            // failsafe, if we don't have a Phalcon Dependency Injector object, use our relative location
-            $modelDirs = array("__DIR__.'/../../../");
         }
 
         // collect all XML menu definitions into a single file
@@ -202,12 +200,16 @@ class MenuSystem
         // collect interfaces for dynamic (interface) menu tabs...
         $iftargets = ['if' => [], 'gr' => [], 'wl' => [], 'fw' => [], 'dhcp4' => [], 'dhcp6' => []];
         $ifgroups = [];
+        $ifgroups_seq = [];
 
         if ($config->interfaces->count() > 0) {
             if ($config->ifgroups->count() > 0) {
                 foreach ($config->ifgroups->children() as $key => $node) {
                     if (empty($node->members) || !empty($node->nogroup)) {
                         continue;
+                    }
+                    if (!empty((string)$node->sequence)) {
+                        $ifgroups_seq[(string)$node->ifname] = (int)((string)$node->sequence);
                     }
                     /* we need both if and gr reference */
                     $iftargets['if'][(string)$node->ifname] = (string)$node->ifname;
@@ -231,7 +233,7 @@ class MenuSystem
                     $iftargets['wl'][$key] = !empty($node->descr) ? (string)$node->descr : strtoupper($key);
                 }
                 // "Firewall: Rules" menu tab...
-                if (isset($node->enable)) {
+                if (isset($node->enable) && $node->if != 'lo0') {
                     $iftargets['fw'][$key] = !empty($node->descr) ? (string)$node->descr : strtoupper($key);
                 }
                 // "Services: DHCPv[46]" menu tab:
@@ -251,13 +253,13 @@ class MenuSystem
         }
 
         // add groups and interfaces to "Interfaces" menu tab...
-        $ordid = 0;
+        $ordid = count($ifgroups_seq) > 0 ? max($ifgroups_seq) : 0;
         foreach ($iftargets['if'] as $key => $descr) {
             if (array_key_exists($key, $iftargets['gr'])) {
                 $this->appendItem('Interfaces', $key, array(
                     'visiblename' => '[' . $descr . ']',
                     'cssclass' => 'fa fa-sitemap',
-                    'order' => $ordid++,
+                    'order' => isset($ifgroups_seq[$key]) ? $ifgroups_seq[$key] : $ordid++,
                 ));
             } elseif (!array_key_exists($key, $ifgroups)) {
                 $this->appendItem('Interfaces', $key, array(
@@ -332,36 +334,36 @@ class MenuSystem
         // add interfaces to "Services: DHCPv[46]" menu tab:
         $ordid = 0;
         foreach ($iftargets['dhcp4'] as $key => $descr) {
-            $this->appendItem('Services.DHCPv4', $key, array(
+            $this->appendItem('Services.ISC_DHCPv4', $key, array(
                 'url' => '/services_dhcp.php?if=' . $key,
                 'visiblename' => "[$descr]",
                 'order' => $ordid++,
             ));
-            $this->appendItem('Services.DHCPv4.' . $key, 'Edit' . $key, array(
+            $this->appendItem('Services.ISC_DHCPv4.' . $key, 'Edit' . $key, array(
                 'url' => '/services_dhcp.php?if=' . $key . '&*',
                 'visibility' => 'hidden',
             ));
-            $this->appendItem('Services.DHCPv4.' . $key, 'AddStatic' . $key, array(
+            $this->appendItem('Services.ISC_DHCPv4.' . $key, 'AddStatic' . $key, array(
                 'url' => '/services_dhcp_edit.php?if=' . $key,
                 'visibility' => 'hidden',
             ));
-            $this->appendItem('Services.DHCPv4.' . $key, 'EditStatic' . $key, array(
+            $this->appendItem('Services.ISC_DHCPv4.' . $key, 'EditStatic' . $key, array(
                 'url' => '/services_dhcp_edit.php?if=' . $key . '&*',
                 'visibility' => 'hidden',
             ));
         }
         $ordid = 0;
         foreach ($iftargets['dhcp6'] as $key => $descr) {
-            $this->appendItem('Services.DHCPv6', $key, array(
+            $this->appendItem('Services.ISC_DHCPv6', $key, array(
                 'url' => '/services_dhcpv6.php?if=' . $key,
                 'visiblename' => "[$descr]",
                 'order' => $ordid++,
             ));
-            $this->appendItem('Services.DHCPv6.' . $key, 'Add' . $key, array(
+            $this->appendItem('Services.ISC_DHCPv6.' . $key, 'Add' . $key, array(
                 'url' => '/services_dhcpv6_edit.php?if=' . $key,
                 'visibility' => 'hidden',
             ));
-            $this->appendItem('Services.DHCPv6.' . $key, 'Edit' . $key, array(
+            $this->appendItem('Services.ISC_DHCPv6.' . $key, 'Edit' . $key, array(
                 'url' => '/services_dhcpv6_edit.php?if=' . $key . '&*',
                 'visibility' => 'hidden',
             ));

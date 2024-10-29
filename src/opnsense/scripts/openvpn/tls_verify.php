@@ -26,8 +26,8 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
-require_once("config.inc");
+require_once("script/load_phalcon.php");
+require_once("util.inc");
 
 /**
  * verify certificate depth
@@ -41,9 +41,28 @@ function do_verify($serverid)
         return "OpenVPN '$serverid' was not found. Denying authentication for user {$username}";
     }
     $certificate_depth = getenv('certificate_depth') !== false ? getenv('certificate_depth') : 0;
-    $allowed_depth = !empty($a_server['cert_depth']) ? $a_server['cert_depth'] : 1;
-    if ($allowed_depth != null && ($certificate_depth > $allowed_depth)) {
+    $allowed_depth = !empty($a_server['cert_depth']) ? $a_server['cert_depth'] : $certificate_depth;
+    if ($certificate_depth > $allowed_depth) {
         return "Certificate depth {$certificate_depth} exceeded max allowed depth of {$allowed_depth}.";
+    } elseif ($a_server['use_ocsp'] && $certificate_depth == 0) {
+        $serial = getenv('tls_serial_' . $certificate_depth);
+        $ocsp_response = OPNsense\Trust\Store::ocsp_validate("/var/etc/openvpn/instance-" . $serverid . ".ca", $serial);
+        if (!$ocsp_response['pass']) {
+            return sprintf(
+                "[serial : %s] @ %s - %s (%s)",
+                $serial,
+                $ocsp_response['uri'],
+                $ocsp_response['response'],
+                $ocsp_response['verify']
+            );
+        } else {
+            syslog(LOG_INFO, sprintf(
+                "tls-verify : [serial : %s] @ %s - %s",
+                $serial,
+                $ocsp_response['uri'],
+                $ocsp_response['response']
+            ));
+        }
     }
     return true;
 }
@@ -51,10 +70,8 @@ function do_verify($serverid)
 openlog("openvpn", LOG_ODELAY, LOG_AUTH);
 $response = do_verify(getenv('auth_server'));
 if ($response !== true) {
-    syslog(LOG_WARNING, $response);
-    closelog();
+    syslog(LOG_WARNING, "tls-verify : {$response}");
     exit(1);
-} else {
-    closelog();
-    exit(0);
 }
+
+exit(0);

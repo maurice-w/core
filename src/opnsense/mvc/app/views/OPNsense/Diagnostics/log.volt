@@ -43,6 +43,7 @@
           } else {
               s_filter_val = localStorage.getItem('log_severity_{{module}}_{{scope}}') ? localStorage.getItem('log_severity_{{module}}_{{scope}}').split(',') : s_filter_val;
           }
+          $("#validFrom_filter").val(localStorage.getItem('log_validFrom_filter_{{module}}_{{scope}}') ? localStorage.getItem('log_validFrom_filter_{{module}}_{{scope}}') : 'day');
       }
       switch_mode(s_filter_val);
 
@@ -71,14 +72,24 @@
                       // get selected severities or severities below or equal to selected
                       request['severity'] = filter_exact ? selectedSeverity : severities.slice(0,severities.indexOf(selectedSeverity) + 1);
                   }
+                  let time_offsets = {
+                        'day': 60*60*24,
+                        'week': 7*60*60*24,
+                        'month': 31*60*60*24,
+                    }
+                  if ($("#validFrom_filter").val().length > 0 && time_offsets[$("#validFrom_filter").val()]) {
+                    let now = Date.now()  / 1000;
+                    request['validFrom'] = now - time_offsets[$("#validFrom_filter").val()];
+                  }
                   return request;
               },
           },
           search:'/api/diagnostics/log/{{module}}/{{scope}}'
       });
-      $("#severity_filter").change(function(){
+      $(".filter_act").change(function(){
           if (window.localStorage) {
               localStorage.setItem('log_severity_{{module}}_{{scope}}', $("#severity_filter").val());
+              localStorage.setItem('log_validFrom_filter_{{module}}_{{scope}}', $("#validFrom_filter").val());
           }
           $('#grid-log').bootgrid('reload');
       });
@@ -144,20 +155,23 @@
       updateServiceControlUI('{{service}}');
 
       // move filter into action header
-      $("#severity_filter_container").detach().prependTo('#grid-log-header > .row > .actionBar > .actions');
+      $("#filter_container").detach().prependTo('#grid-log-header > .row > .actionBar > .actions');
+      $(".filter_act").tooltip();
 
 
       function switch_mode(value) {
           let select = $("#severity_filter");
-
-          // switch select mode and destroy selectpicker
-          select.prop("multiple", filter_exact);
-          select.selectpicker('destroy');
-
-          // remove title option. bug in bs-select. fixed in v1.13.18 https://github.com/snapappointments/bootstrap-select/issues/2491
-          select.find('option.bs-title-option').remove();
-
           let header_val = filter_exact ? m_header : s_header;
+
+          // switch select mode and reinit selectpicker
+          select.prop("multiple", filter_exact);
+
+          // destroy, reinit & reopen select after load if called from mode switch
+          if (event && (event.currentTarget.id == 'exact_severity')) {
+              select.selectpicker('destroy').on('loaded.bs.select', function () {
+                  select.selectpicker('toggle');
+              });
+          }
           select.selectpicker({ header: header_val });
 
           // attach event handler each time header created
@@ -179,8 +193,6 @@
                   localStorage.setItem('log_severity_{{module}}_{{scope}}', new_val);
               }
               switch_mode(new_val);
-              // keep it open
-              select.selectpicker('toggle');
           });
 
           select.val(value);
@@ -198,8 +210,8 @@
             <div  class="col-sm-12">
                 <div class="hidden">
                     <!-- filter per type container -->
-                    <div id="severity_filter_container" class="btn-group">
-                        <select id="severity_filter" data-title="{{ lang._('Severity') }}" class="selectpicker" data-width="200px">
+                    <div id="filter_container" class="btn-group">
+                        <select id="severity_filter"  data-title="{{ lang._('Severity') }}" class="filter_act" data-width="200px">
                             <option value="Emergency">{{ lang._('Emergency') }}</option>
                             <option value="Alert">{{ lang._('Alert') }}</option>
                             <option value="Critical">{{ lang._('Critical') }}</option>
@@ -208,6 +220,12 @@
                             <option value="Notice">{{ lang._('Notice') }}</option>
                             <option value="Informational">{{ lang._('Informational') }}</option>
                             <option value="Debug">{{ lang._('Debug') }}</option>
+                        </select>
+                        <select id="validFrom_filter" data-title="{{ lang._('History') }}" class="filter_act selectpicker" data-width="200px">
+                            <option selected="selected" value="day">{{ lang._('Last day') }}</option>
+                            <option value="week">{{ lang._('Last week') }}</option>
+                            <option value="month">{{ lang._('Last month') }}</option>
+                            <option value="all">{{ lang._('No limit') }}</option>
                         </select>
                     </div>
                 </div>

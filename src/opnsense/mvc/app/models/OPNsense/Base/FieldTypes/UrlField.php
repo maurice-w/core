@@ -28,7 +28,7 @@
 
 namespace OPNsense\Base\FieldTypes;
 
-use OPNsense\Phalcon\Filter\Validation\Validator\Url as UrlValidator;
+use OPNsense\Base\Validators\Url as UrlValidator;
 
 /**
  * Class EmailField

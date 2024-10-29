@@ -1,10 +1,10 @@
 <model>
     <mount>//OPNsense/IDS</mount>
-    <version>1.0.9</version>
+    <version>1.1.0</version>
     <description>OPNsense IDS</description>
     <items>
         <rules>
-            <rule type="ArrayField">
+            <rule type=".\PolicyRulesField">
                 <sid type="IntegerField">
                     <ValidationMessage>Sid should be a number.</ValidationMessage>
                     <Required>Y</Required>
@@ -70,10 +70,7 @@
                         <disable>Disable</disable>
                     </OptionValues>
                 </new_action>
-                <description type="TextField">
-                    <Mask>/^(.){1,255}$/u</Mask>
-                    <ValidationMessage>Description should be a string between 1 and 255 characters</ValidationMessage>
-                </description>
+                <description type="DescriptionField"/>
             </policy>
         </policies>
         <userDefinedRules>
@@ -89,10 +86,8 @@
                     <Mask>/^([0-9a-fA-F:]){59,59}$/u</Mask>
                     <ValidationMessage>A SSL fingerprint should be a 59 character long hex value.</ValidationMessage>
                 </fingerprint>
-                <description type="TextField">
+                <description type="DescriptionField">
                     <Required>Y</Required>
-                    <Mask>/^([\t\n\v\f\r 0-9a-zA-Z.\-,_\x{00A0}-\x{FFFF}]){1,255}$/u</Mask>
-                    <ValidationMessage>Description should be a string between 1 and 255 characters.</ValidationMessage>
                 </description>
                 <action type="OptionField">
                     <Required>Y</Required>
@@ -248,6 +243,57 @@
                     <vvvv>DEBUG (4)</vvvv>
                 </OptionValues>
             </verbosity>
+            <eveLog>
+                <http>
+                    <enable type="BooleanField">
+                        <Default>0</Default>
+                        <Required>Y</Required>
+                    </enable>
+                    <extended type="BooleanField">
+                        <Default>0</Default>
+                        <Required>Y</Required>
+                    </extended>
+                    <dumpAllHeaders type="OptionField">
+                        <OptionValues>
+                            <request>Request</request>
+                            <response>Response</response>
+                            <both>Both</both>
+                        </OptionValues>
+                    </dumpAllHeaders>
+                </http>
+                <tls>
+                    <enable type="BooleanField">
+                        <Default>0</Default>
+                        <Required>Y</Required>
+                    </enable>
+                    <extended type="BooleanField">
+                        <Default>0</Default>
+                        <Required>Y</Required>
+                    </extended>
+                    <sessionResumption type="BooleanField">
+                        <Default>0</Default>
+                        <Required>Y</Required>
+                    </sessionResumption>
+                    <custom type="OptionField">
+                        <OptionValues>
+                            <subject>subject</subject>
+                            <issuer>issuer</issuer>
+                            <session_resumed>session_resumed</session_resumed>
+                            <serial>serial</serial>
+                            <fingerprint>fingerprint</fingerprint>
+                            <sni>sni</sni>
+                            <version>version</version>
+                            <not_before>not_before</not_before>
+                            <not_after>not_after</not_after>
+                            <certificate>certificate</certificate>
+                            <chain>chain</chain>
+                            <ja3>ja3</ja3>
+                            <ja3s>ja3s</ja3s>
+                        </OptionValues>
+                        <Multiple>Y</Multiple>
+                    </custom>
+                </tls>
+            </eveLog>
         </general>
     </items>
 </model>

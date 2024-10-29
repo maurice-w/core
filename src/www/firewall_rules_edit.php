@@ -49,7 +49,7 @@ $gateways = new \OPNsense\Routing\Gateways();
 function FormSetAdvancedOptions(&$item) {
     foreach (array("max", "max-src-nodes", "max-src-conn", "max-src-states","nopfsync", "statetimeout", "adaptivestart"
                   , "adaptiveend", "max-src-conn-rate","max-src-conn-rates", "tag", "tagged", "allowopts", "reply-to","tcpflags1"
-                  ,"tcpflags2", "tos") as $fieldname) {
+                  ,"tcpflags2", "tos", "state-policy") as $fieldname) {
 
         if (strlen($item[$fieldname]) > 0) {
             return true;
@@ -126,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'set-prio-low',
         'statetimeout',
         'statetype',
+        'state-policy',
         'tag',
         'tagged',
         'tcpflags1',
@@ -421,6 +422,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $input_errors[] = gettext("Both maximum new connections per host and the interval (per second(s)) must be specified");
     }
 
+    if (!empty($pconfig['state-policy']) && !in_array($pconfig['state-policy'], ['if-bound', 'floating'])) {
+      $input_errors[] = sprintf(gettext("Invalid state policy type %s"), $pconfig['state-policy']);
+    }
+
     if (empty($pconfig['max']) && ($pconfig['adaptivestart'] === "0" || $pconfig['adaptiveend'] === "0")) {
         $input_errors[] = gettext("Disabling adaptive timeouts is only supported in combination with a configured maximum number of states for the same rule.");
     } elseif ($pconfig['adaptivestart'] === "0" xor $pconfig['adaptiveend'] === "0") {
@@ -467,7 +472,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // 1-on-1 copy of form values
         $copy_fields = array('type', 'interface', 'ipprotocol', 'tag', 'tagged', 'max', 'max-src-nodes'
                             , 'max-src-conn', 'max-src-states', 'statetimeout', 'statetype', 'os', 'descr', 'gateway'
-                            , 'sched', 'associated-rule-id', 'direction'
+                            , 'sched', 'associated-rule-id', 'direction', 'state-policy'
                             , 'max-src-conn-rate', 'max-src-conn-rates', 'category') ;
 
 
@@ -774,7 +779,7 @@ include("head.inc");
                 <input name="after" type="hidden" value="<?=isset($after) ? $after :'';?>" />
                 <input type="hidden" name="floating" value="<?=$pconfig['floating'];?>" />
                 <div class="table-responsive">
-                  <table class="table table-striped opnsense_standard_table_form">
+                  <table role="presentation" class="table table-striped opnsense_standard_table_form">
                   <tr>
                     <td style="width:22%"><strong><?=gettext("Edit Firewall rule");?></strong></td>
                     <td style="width:78%;text-align:right">
@@ -886,7 +891,7 @@ include("head.inc");
 <?php
                     endif;
 
-                    foreach (legacy_config_get_interfaces(array("enable" => true)) as $iface => $ifdetail): ?>
+                    foreach (legacy_config_get_interfaces(["enable" => true], ['lo0']) as $iface => $ifdetail): ?>
                         <option value="<?=$iface;?>"
                             <?= !empty($pconfig['interface']) && (
                                   $iface == $pconfig['interface'] ||
@@ -1059,10 +1064,10 @@ include("head.inc");
                   <tr>
                       <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Source"); ?></td>
                       <td>
-                        <table class="table table-condensed">
+                        <table style="max-width: 348px">
                           <tr>
                             <td>
-                              <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="src" id="src" class="selectpicker" data-live-search="true" data-size="5" data-width="auto">
+                              <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="src" id="src" class="selectpicker" data-live-search="true" data-size="5" data-width="348px">
                                 <option data-other=true value="<?=$pconfig['src'];?>" <?=!is_specialnet($pconfig['src']) ? "selected=\"selected\"" : "";?>><?=gettext("Single host or Network"); ?></option>
                                 <optgroup label="<?=gettext("Aliases");?>">
   <?php                        foreach (legacy_list_aliases("network") as $alias):
@@ -1082,18 +1087,18 @@ include("head.inc");
                         <tr>
                           <td>
                             <div>
-                              <table style="border:0;">
+                              <table style="max-width: 348px">
                                 <tbody>
                                   <tr>
-                                      <td style="width:348px">
+                                      <td style="width:285px">
                                         <!-- updates to "other" option in  src -->
                                         <input <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?>  type="text" id="src_address" for="src" value="<?=$pconfig['src'];?>" aria-label="<?=gettext("Source address");?>"/>
                                       </td>
                                       <td>
-                                        <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="srcmask" data-network-id="src_address" class="selectpicker ipv4v6net" data-size="5" id="srcmask"  data-width="auto" for="src" >
-                                        <?php for ($i = 128; $i > 0; $i--): ?>
+                                        <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="srcmask" data-network-id="src_address" class="selectpicker ipv4v6net" data-size="5" id="srcmask" data-width="70px" for="src">
+<?php for ($i = 128; $i > 0; $i--): ?>
                                           <option value="<?=$i;?>" <?= $i == $pconfig['srcmask'] ? "selected=\"selected\"" : ""; ?>><?=$i;?></option>
-                                        <?php endfor; ?>
+<?php endfor ?>
                                         </select>
                                       </td>
                                   </tr>
@@ -1187,10 +1192,10 @@ include("head.inc");
                   <tr>
                     <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Destination"); ?></td>
                     <td>
-                      <table class="table table-condensed">
+                      <table style="max-width: 348px">
                         <tr>
                           <td>
-                            <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="dst" id="dst" class="selectpicker" data-live-search="true" data-size="5" data-width="auto">
+                            <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="dst" id="dst" class="selectpicker" data-live-search="true" data-size="5" data-width="348px">
                               <option data-other=true value="<?=$pconfig['dst'];?>" <?=!is_specialnet($pconfig['dst']) ? "selected=\"selected\"" : "";?>><?=gettext("Single host or Network"); ?></option>
                               <optgroup label="<?=gettext("Aliases");?>">
   <?php                        foreach (legacy_list_aliases("network") as $alias):
@@ -1209,18 +1214,18 @@ include("head.inc");
                         </tr>
                         <tr>
                           <td>
-                            <table style="border:0;">
+                            <table style="max-width: 348px">
                               <tbody>
                                 <tr>
-                                    <td style="width:348px">
+                                    <td style="width:285px">
                                       <!-- updates to "other" option in  src -->
                                       <input <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?>  type="text" id="dst_address" for="dst" value="<?=$pconfig['dst'];?>" aria-label="<?=gettext("Destination address");?>"/>
                                     </td>
                                     <td>
-                                      <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="dstmask" class="selectpicker ipv4v6net" data-network-id="dst_address" data-size="5" id="dstmask"  data-width="auto" for="dst" >
-                                      <?php for ($i = 128; $i > 0; $i--): ?>
+                                      <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="dstmask" class="selectpicker ipv4v6net" data-network-id="dst_address" data-size="5" id="dstmask" data-width="70px" for="dst">
+<?php for ($i = 128; $i > 0; $i--): ?>
                                         <option value="<?=$i;?>" <?= $i == $pconfig['dstmask'] ? "selected=\"selected\"" : ""; ?>><?=$i;?></option>
-                                      <?php endfor; ?>
+<?php endfor; ?>
                                       </select>
                                     </td>
                                 </tr>
@@ -1299,7 +1304,7 @@ include("head.inc");
                       <input name="log" type="checkbox" id="log" value="yes" <?= !empty($pconfig['log']) ? "checked=\"checked\"" : ""; ?> />
                       <?= gettext('Log packets that are handled by this rule') ?>
                       <div class="hidden" data-for="help_for_log">
-                        <?=sprintf(gettext("Hint: the firewall has limited local log space. Don't turn on logging for everything. If you want to do a lot of logging, consider using a %sremote syslog server%s."),'<a href="diag_logs_settings.php">','</a>') ?>
+                        <?=sprintf(gettext("Hint: the firewall has limited local log space. Don't turn on logging for everything. If you want to do a lot of logging, consider using a %sremote syslog server%s."),'<a href="ui/syslog/">','</a>') ?>
                       </div>
                     </td>
                   </tr>
@@ -1716,6 +1721,30 @@ endforeach;?>
                           </div>
                         </td>
                     </tr>
+                    <tr class="opt_advanced hidden">
+                      <td><a id="help_for_state_policy" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("State policy");?></td>
+                      <td>
+                        <select name="state-policy" class="selectpicker" data-live-search="true" data-size="5" >
+<?php
+                        $statepolicies = [
+                          '' => gettext('Default'),
+                          'if-bound' => gettext('Bind states to interface'),
+                          'floating' =>  gettext('Floating states')
+                        ];
+                        foreach ($statepolicies as $policy => $pol_descr): ?>
+                        <option value="<?=$policy;?>" <?= $policy == $pconfig['state-policy'] ? "selected=\"selected\"" : "" ?>>
+                            <?=$pol_descr;?>
+                        </option>
+<?php
+                      endforeach; ?>
+                      </select>
+                      <div class="hidden" data-for="help_for_state_policy">
+                        <?=gettext("Choose how states created by this rule are treated, default (as defined in advanced), ".
+                                   "floating in which case states are valid on all interfaces or ".
+                                   "interface bound. Interface bound states are more secure, floating more flexible") ?>
+                      </div>
+                    </td>
+                  <tr>
 <?php
                     $has_created_time = (isset($a_filter[$id]['created']) && is_array($a_filter[$id]['created']));
                     $has_updated_time = (isset($a_filter[$id]['updated']) && is_array($a_filter[$id]['updated']));
@@ -1729,7 +1758,7 @@ endforeach;?>
                     <tr>
                       <td><?=gettext("Created");?></td>
                       <td>
-                        <?= date(gettext('n/j/y H:i:s'), $a_filter[$id]['created']['time']) ?> (<?= $a_filter[$id]['created']['username'] ?>)
+                        <?= date(gettext('n/j/y H:i:s'), (int)$a_filter[$id]['created']['time']) ?> (<?= $a_filter[$id]['created']['username'] ?>)
                       </td>
                     </tr>
 <?php
@@ -1738,7 +1767,7 @@ endforeach;?>
                     <tr>
                       <td><?=gettext("Updated");?></td>
                       <td>
-                        <?= date(gettext('n/j/y H:i:s'), $a_filter[$id]['updated']['time']) ?> (<?= $a_filter[$id]['updated']['username'] ?>)
+                        <?= date(gettext('n/j/y H:i:s'), (int)$a_filter[$id]['updated']['time']) ?> (<?= $a_filter[$id]['updated']['username'] ?>)
                       </td>
                     </tr>
 <?php

@@ -35,7 +35,7 @@ require_once("system.inc");
 $a_defaults = system_sysctl_defaults();
 $a_system = []; /* to be filled from defaults */
 $a_tunable = &config_read_array('sysctl', 'item');
-$a_sysctl = json_decode(configd_run('system sysctl'), true);
+$a_sysctl = json_decode(configd_run('system sysctl gather'), true);
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     if (isset($_GET['id']) && isset($a_tunable[$_GET['id']])) {
@@ -142,11 +142,14 @@ foreach ($a_tunable as $key => &$tunable) {
 
 foreach ($a_system as $default) {
     /* display system defaults as well */
-    $next = [ 'tunable' => $default, 'value' => 'default', 'descr' => $a_sysctl[$default]['description'] ];
+    $next = [ 'tunable' => $default, 'value' => 'default', 'descr' => $a_sysctl[$default]['description'] ?? '' ];
     if (!empty($a_defaults[$default]['type'])) {
         $next['type'] = $a_defaults[$default]['type'];
     } elseif (!empty($a_sysctl[$default]['type'])) {
         $next['type'] = $a_sysctl[$default]['type'];
+    }
+    if (!empty($a_defaults[$default]['description'])) {
+        $next['descr'] = $a_defaults[$default]['description'];
     }
     $a_tunable[] = $next;
 }

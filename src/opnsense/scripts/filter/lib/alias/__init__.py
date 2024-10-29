@@ -158,6 +158,20 @@ class Alias(object):
 
         return list(self._resolve_content)
 
+    @staticmethod
+    def read_alias_file(filename):
+        """
+        :param filename: filename to read (when it exists)
+        :return: string, empty when not found or not parseable
+        """
+        if os.path.isfile(filename):
+            try:
+                return open(filename, 'r').read()
+            except UnicodeDecodeError:
+                return ''
+        return ''
+
+
     def resolve(self, force=False):
         """ resolve (fetch) alias content, without dependencies.
             :force: force load
@@ -165,13 +179,7 @@ class Alias(object):
         """
         if not self._resolve_content:
             if self.expired() or self.changed() or force:
-                if os.path.isfile(self._filename_alias_content):
-                    try:
-                        undo_content = open(self._filename_alias_content, 'r').read()
-                    except UnicodeDecodeError:
-                        undo_content = ""
-                else:
-                    undo_content = ""
+                undo_content = self.read_alias_file(self._filename_alias_content)
                 try:
                     self._resolve_content = self.pre_process()
                     address_parser = self.get_parser()
@@ -181,19 +189,28 @@ class Alias(object):
                                 self._resolve_content.add(address)
                         # resolve hostnames (async) if there are any in the collected set
                         self._resolve_content = self._resolve_content.union(address_parser.resolve_dns())
-                    # Always save last recorded content to disk, also when we're not responsible for the alias
-                    # so we can use cached results when reloading a single alias.
-                    with open(self._filename_alias_content, 'w') as f_out:
-                        f_out.write('\n'.join(self._resolve_content))
                 except (IOError, DNSException) as e:
                     syslog.syslog(syslog.LOG_ERR, 'alias resolve error %s (%s)' % (self._name, e))
-                    # parse issue, keep data as-is, flush previous content to disk
-                    with open(self._filename_alias_content, 'w') as f_out:
-                        f_out.write(undo_content)
                     self._resolve_content = set(undo_content.split("\n"))
+
+                resolve_content_str = '\n'.join(sorted(self._resolve_content))
+                if undo_content != resolve_content_str:
+                    # Always save last recorded content to disk when changed, even when we're not responsible
+                    # for the alias, so we can use cached results when reloading a single alias.
+                    with open(self._filename_alias_content, 'w') as f_out:
+                        f_out.write(resolve_content_str)
+
                 if self.get_parser():
-                    # flush md5 hash to disk
-                    open(self._filename_alias_hash, 'w').write(self.uniqueid())
+                    # flush md5 hash to disk (when unchanged)
+                    new_uniqueid = self.uniqueid()
+                    old_uniqueid = None
+                    if os.path.isfile(self._filename_alias_hash):
+                       old_uniqueid = open(self._filename_alias_hash, 'r').read()
+                    if old_uniqueid != new_uniqueid:
+                        open(self._filename_alias_hash, 'w').write(self.uniqueid())
+                    else:
+                        # update modification time for correct TTL measurements when unchanged
+                        os.utime(self._filename_alias_hash, None)
             else:
                 self._resolve_content = set(open(self._filename_alias_content).read().split())
         # return the addresses and networks of this alias

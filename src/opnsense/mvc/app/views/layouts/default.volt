@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en-US" class="no-js">
+<html lang="{{ langcode|safe }}" class="no-js">
   <head>
 
     <meta charset="UTF-8" />
@@ -10,6 +10,8 @@
     <meta name="description" content="" />
     <meta name="copyright" content="" />
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
 
     <title>{{headTitle|default("OPNsense") }} | {{system_hostname}}.{{system_domain}}</title>
     {% set theme_name = ui_theme|default('opnsense') %}
@@ -199,6 +201,16 @@
                 $("form").submit(function() {
                     return false;
                 });
+
+                /* overwrite clipboard paste behavior and trim before paste */
+                $("input").on('paste', function(e) {
+                    let clipboard_data = e.originalEvent.clipboardData.getData("text/plain").trim();
+                    if (clipboard_data.length > 0) {
+                        e.preventDefault();
+                        document.execCommand('insertText', false, clipboard_data);
+                    }
+                });
+
             });
         </script>
 

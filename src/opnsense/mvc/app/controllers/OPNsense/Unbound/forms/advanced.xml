@@ -34,6 +34,16 @@
         </help>
     </field>
     <field>
+        <id>unbound.advanced.aggressivensec</id>
+        <label>Aggressive NSEC</label>
+        <type>checkbox</type>
+        <help>
+            Enable RFC8198-based aggressive use of the DNSSEC-Validated cache.
+            Helps to reduce the query rate towards targets but may lead to false negative responses
+            if there are errors in the zone config.
+        </help>
+    </field>
+    <field>
         <id>unbound.advanced.qnameminstrict</id>
         <label>Strict QNAME Minimisation</label>
         <type>checkbox</type>
@@ -93,6 +103,17 @@
             to run to completion, and the other 50% are replaced with the new incoming query if they have
             already spent more than their allowed time. This protects against denial of service by
             slow queries or high query rates.
+        </help>
+    </field>
+    <field>
+        <id>unbound.advanced.discardtimeout</id>
+        <label>Discard Timeout</label>
+        <type>text</type>
+        <help>
+	    The wait time in msec where recursion requests are dropped. This is to stop a large number of replies
+            from accumulating. If 'Serve Expired Responses' is enabled this field should be set greater than
+            'Client Expired Response Timeout', otherwise, these late responses will not update the cache.
+            The value 0 disables it. Default 1900. This setting may increase the "request queue exceeded" counter.
         </help>
     </field>
     <field>
@@ -182,7 +203,7 @@
         <help>
             Time in milliseconds before replying to the client with expired data. This essentially enables the serve-
             stable behavior as specified in RFC 8767 that first tries to resolve before immediately responding with expired
-            data. A recommended value per RF 8767 is 1800. Setting this to 0 will disable this behavior.
+            data. A recommended value per RFC 8767 is 1800. Setting this to 0 will disable this behavior.
         </help>
     </field>
     <field>

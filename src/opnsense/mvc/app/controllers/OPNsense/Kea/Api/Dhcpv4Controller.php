@@ -29,6 +29,8 @@
 namespace OPNsense\Kea\Api;
 
 use OPNsense\Base\ApiMutableModelControllerBase;
+use OPNsense\Core\Config;
+use OPNsense\Firewall\Util;
 
 class Dhcpv4Controller extends ApiMutableModelControllerBase
 {
@@ -43,14 +45,16 @@ class Dhcpv4Controller extends ApiMutableModelControllerBase
         $data = parent::getAction();
         return [
             self::$internalModelName => [
-                'general' => $data[self::$internalModelName]['general']
+                'general' => $data[self::$internalModelName]['general'],
+                'ha' => $data[self::$internalModelName]['ha'],
+                'this_hostname' => (string)Config::getInstance()->object()->system->hostname
             ]
         ];
     }
 
     public function searchSubnetAction()
     {
-        return $this->searchBase("subnets.subnet4", ['subnet'], "subnet");
+        return $this->searchBase("subnets.subnet4", null, "subnet");
     }
 
     public function setSubnetAction($uuid)
@@ -75,11 +79,7 @@ class Dhcpv4Controller extends ApiMutableModelControllerBase
 
     public function searchReservationAction()
     {
-        return $this->searchBase(
-            "reservations.reservation",
-            ['subnet', 'ip_address', 'hw_address', 'hostname', 'description'],
-            "hw_address"
-        );
+        return $this->searchBase("reservations.reservation", null, "hw_address");
     }
 
     public function setReservationAction($uuid)
@@ -100,5 +100,64 @@ class Dhcpv4Controller extends ApiMutableModelControllerBase
     public function delReservationAction($uuid)
     {
         return $this->delBase("reservations.reservation", $uuid);
+    }
+
+    public function downloadReservationsAction()
+    {
+        if ($this->request->isGet()) {
+            $this->exportCsv($this->getModel()->reservations->reservation->asRecordSet(false, ['subnet']));
+        }
+    }
+
+    public function uploadReservationsAction()
+    {
+        if ($this->request->isPost() && $this->request->hasPost('payload')) {
+            $subnets = [];
+            foreach ($this->getModel()->subnets->subnet4->iterateItems() as $key => $node) {
+                $subnets[(string)$node->subnet] = $key;
+            }
+            return $this->importCsv(
+                'reservations.reservation',
+                $this->request->getPost('payload'),
+                ['hw_address', 'subnet'],
+                function (&$record) use ($subnets) {
+                    /* seek matching subnet */
+                    if (!empty($record['ip_address'])) {
+                        foreach ($subnets as $subnet => $uuid) {
+                            if (Util::isIPInCIDR($record['ip_address'], $subnet)) {
+                                $record['subnet'] = $uuid;
+                            }
+                        }
+                    }
+                }
+            );
+        } else {
+            return ['status' => 'failed'];
+        }
+    }
+
+    public function searchPeerAction()
+    {
+        return $this->searchBase("ha_peers.peer", null, "name");
+    }
+
+    public function setPeerAction($uuid)
+    {
+        return $this->setBase("peer", "ha_peers.peer", $uuid);
+    }
+
+    public function addPeerAction()
+    {
+        return $this->addBase("peer", "ha_peers.peer");
+    }
+
+    public function getPeerAction($uuid = null)
+    {
+        return $this->getBase("peer", "ha_peers.peer", $uuid);
+    }
+
+    public function delPeerAction($uuid)
+    {
+        return $this->delBase("ha_peers.peer", $uuid);
     }
 }

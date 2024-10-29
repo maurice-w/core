@@ -28,10 +28,10 @@
 
 function vxlan_configure()
 {
-    return array(
-        'newwanip' => array('vxlan_configure_do'),
-        'vxlan' => array('vxlan_configure_do'),
-    );
+    return [
+        'newwanip' => ['vxlan_configure_do'],
+        'vxlan' => ['vxlan_configure_do'],
+    ];
 }
 
 function vxlan_devices()
@@ -82,6 +82,7 @@ function vxlan_configure_do($verbose = false, $device = null)
     // (re)configure vxlan devices
     foreach ($vxlans as $vxlan) {
         $device_name = "vxlan{$vxlan->deviceId}";
+        $isChanged = false;
 
         if ($device !== null && $device != $device_name) {
             $configured_devices[] = $device_name;
@@ -94,36 +95,39 @@ function vxlan_configure_do($verbose = false, $device = null)
         }
 
         $configured_devices[] = $device_name;
-        $current_settings = [
-            'vxlanid' => null,
-            'vxlanlocal' => null,
-            'vxlanremote' => null,
-            'vxlangroup' => null,
-        ];
+        $current_settings = [];
 
         if (empty($interfaces_details[$device_name])) {
             // new device
             mwexecf('/sbin/ifconfig vxlan create name %s', array($device_name));
             $isChanged = true;
         } else {
-            $isChanged = false;
             $current_settings['vxlanid'] = $interfaces_details[$device_name]['vxlan']['vni'];
-            $current_settings['vxlanlocal'] = explode(":", $interfaces_details[$device_name]['vxlan']['local'])[0];
-            $current_settings['vxlanremote'] = explode(":", $interfaces_details[$device_name]['vxlan']['remote'])[0];
-            if (!empty($interfaces_details[$device_name]['vxlan']['group'])) {
-                $current_settings['vxlangroup'] = explode(":", $interfaces_details[$device_name]['vxlan']['group'])[0];
+            foreach (['local', 'remote', 'group'] as $target) {
+                if (!empty($interfaces_details[$device_name]['vxlan'][$target])) {
+                    $tmp = explode(':', $interfaces_details[$device_name]['vxlan'][$target]);
+                    $current_settings['vxlan' . $target] = $tmp[0];
+                    $current_settings['vxlan' . $target . 'port'] = $tmp[1];
+                }
             }
         }
+
         // gather settings, detect changes
         $ifcnfcmd = '/sbin/ifconfig %s';
         $ifcnfcmdp = array($device_name);
-        foreach (array('vxlanid', 'vxlanlocal', 'vxlanremote', 'vxlangroup', 'vxlandev') as $param) {
+        foreach (
+            [
+            'vxlanid', 'vxlanlocal', 'vxlanremote', 'vxlanlocalport', 'vxlanremoteport', 'vxlangroup', 'vxlandev'
+            ] as $param
+        ) {
             $value = '';
             if ($param == 'vxlandev') {
                 $intfnm = (string)$vxlan->$param;
                 if (!empty($cnf->interfaces->$intfnm)) {
                     $value = (string)$cnf->interfaces->$intfnm->if;
                 }
+            } elseif (str_ends_with($param, 'port')) {
+                $value = !empty((string)$vxlan->$param) ? (string)$vxlan->$param : '4789';
             } else {
                 $value = (string)$vxlan->$param;
             }
@@ -132,11 +136,14 @@ function vxlan_configure_do($verbose = false, $device = null)
                 $ifcnfcmdp[] = $value;
             }
             if (isset($current_settings[$param]) && $current_settings[$param] != $value) {
+                // need to bring existing down to apply changes
+                mwexecf('/sbin/ifconfig %s down', [$device_name]);
                 $isChanged = true;
             }
         }
+
         if ($isChanged) {
-            mwexecf($ifcnfcmd, $ifcnfcmdp);
+            mwexecf($ifcnfcmd . ' up', $ifcnfcmdp);
             $changed_devices[] = $device_name;
         }
     }

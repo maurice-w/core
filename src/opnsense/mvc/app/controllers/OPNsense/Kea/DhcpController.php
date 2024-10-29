@@ -40,12 +40,19 @@ class DhcpController extends \OPNsense\Base\IndexController
         ]);
     }
 
+    public function ctrlAgentAction()
+    {
+        $this->view->pick('OPNsense/Kea/ctrl_agent');
+        $this->view->formGeneralSettings = $this->getForm("agentSettings");
+    }
+
     public function v4Action()
     {
         $this->view->pick('OPNsense/Kea/dhcpv4');
-        $this->view->formGeneralSettings = $this->getForm("generalSettings");
-        $this->view->formDialogSubnet = $this->getForm("dialogSubnet");
-        $this->view->formDialogReservation = $this->getForm("dialogReservation");
+        $this->view->formGeneralSettings = $this->getForm("generalSettings4");
+        $this->view->formDialogSubnet = $this->getForm("dialogSubnet4");
+        $this->view->formDialogReservation = $this->getForm("dialogReservation4");
+        $this->view->formDialogPeer = $this->getForm("dialogPeer4");
     }
 
     public function leases4Action()

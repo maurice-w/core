@@ -38,7 +38,6 @@ function auth_log($message, $prio = LOG_ERR)
 {
     openlog('audit', LOG_ODELAY, LOG_AUTH);
     log_msg($message, $prio);
-    closelog();
     reopenlog();
 }
 
@@ -106,7 +105,9 @@ function index_users()
     if (!empty($config['system']['user'])) {
         $i = 0;
         foreach ($config['system']['user'] as $userent) {
-            $userindex[$userent['name']] = $i;
+            if (!empty($userent) && !empty($userent['name'])) {
+                $userindex[$userent['name']] = $i;
+            }
             $i++;
         }
     }
@@ -171,18 +172,20 @@ function &getGroupEntry($name)
 
 function get_user_privileges(&$user)
 {
-    if (!isset($user['priv']) || !is_array($user['priv'])) {
-        $privs = array();
-    } else {
-        $privs = $user['priv'];
+    $privs = [];
+    /* legacy listtags() ensures 'priv' will be an array when offered, also when there's only one  */
+    foreach (!empty($user['priv']) ? (array)$user['priv'] : [] as $item) {
+        foreach (array_filter(explode(',', $item)) as $priv) {
+            $privs[] = $priv;
+        }
     }
 
-    $names = local_user_get_groups($user);
-
-    foreach ($names as $name) {
+    foreach (local_user_get_groups($user) as $name) {
         $group = getGroupEntry($name);
-        if (isset($group['priv']) && is_array($group['priv'])) {
-            $privs = array_merge($privs, $group['priv']);
+        foreach (!empty($group['priv']) ? (array)$group['priv'] : [] as $item) {
+            foreach (array_filter(explode(',', $item)) as $priv) {
+                $privs[] = $priv;
+            }
         }
     }
     return $privs;
@@ -215,10 +218,10 @@ function userIsAdmin($username)
 
 function auth_get_shells($uid = 0)
 {
-    $shells = array('' => '/usr/sbin/nologin');
+    $shells = ['' => '/usr/sbin/nologin'];
 
     if ($uid == 0) {
-        $shells = array('' => '/usr/local/sbin/opnsense-shell');
+        $shells = ['' => '/usr/local/sbin/opnsense-shell'];
     }
 
     $etc_shells = @file_get_contents('/etc/shells');
@@ -325,7 +328,7 @@ function local_user_set(&$user, $force_password = false, $userattrs = null)
     $is_expired = !empty($user['expires']) &&
         strtotime('-1 day') > strtotime(date('m/d/Y', strtotime($user['expires'])));
 
-    $is_disabled = isset($user['disabled']);
+    $is_disabled = !empty($user['disabled']);
 
     $is_unlocked = !$is_disabled && !$is_expired;
 
@@ -349,15 +352,12 @@ function local_user_set(&$user, $force_password = false, $userattrs = null)
         $user_group = 'wheel';
         $user_home = '/root';
     } else {
-        $user_shell = isset($user['shell']) ? $user['shell'] : '/usr/sbin/nologin';
+        $is_admin = userIsAdmin($user['name']);
+        $user_shell = $is_admin && isset($user['shell']) ? $user['shell'] : '/usr/sbin/nologin';
+        $user_group = $is_admin ? 'wheel' : 'nobody';
         $user_home = "/home/{$user_name}";
-        $user_group = 'nobody';
     }
 
-    /* admins access gives wheely rights */
-    if (userIsAdmin($user['name'])) {
-        $user_group = 'wheel';
-    }
     // XXX: primary group id can only be wheel or nobody, otherwise we should map the correct numbers for comparison
     $user_gid = $user_group == 'wheel' ? 0 : 65534;
 
@@ -448,6 +448,11 @@ function local_user_set_password(&$user, $password = null)
     if ($password == null) {
         /* generate a random password */
         $password = random_bytes(50);
+
+        /* XXX since PHP 8.2.18 we need to avoid NUL char */
+        while (($i = strpos($password, "\0")) !== false) {
+            $password[$i] = random_bytes(1);
+        }
     }
 
     if (
